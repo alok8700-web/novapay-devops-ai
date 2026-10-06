@@ -1,0 +1,21 @@
+{{- if .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Chart.Name }}-alerts
+  labels:
+    {{- toYaml .Values.monitoring.prometheusRule.labels | nindent 4 }}
+spec:
+  groups:
+    - name: {{ .Chart.Name }}.rules
+      rules:
+        - alert: NovaPayAPIDown
+          expr: absent(up{service="novapay-service"})
+          for: 1m
+          labels:
+            severity: critical
+            service: novapay-api
+          annotations:
+            summary: "NovaPay API is down"
+            description: "No NovaPay API instances are being monitored by Prometheus."
+{{- end }}
