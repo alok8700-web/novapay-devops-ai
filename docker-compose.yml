@@ -18,4 +18,22 @@ services:
     env_file:
       - .env
 
+  aiops-agent:
+    container_name: novapay-aiops-agent
 
+    build:
+      context: ./aiops-agent
+      dockerfile: Dockerfile
+
+    image: novapay-aiops-agent:dev
+
+    restart: unless-stopped
+
+    environment:
+      NOVAPAY_URL: http://novapay:4000
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      - novapay
