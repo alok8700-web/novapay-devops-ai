@@ -81,13 +81,19 @@ def analyze_incident(
     # 3. Application logs
     # ---------------------------------------------------------
 
+    log_5xx = 0
+    log_4xx = 0
+    slow_requests = 0
+    log_error_rate = 0
+    affected_endpoints = {}
+
     if logs:
-        server_errors = logs.get(
+        log_5xx = logs.get(
             "server_error_requests",
             0,
         )
 
-        client_errors = logs.get(
+        log_4xx = logs.get(
             "client_error_requests",
             0,
         )
@@ -97,16 +103,21 @@ def analyze_incident(
             0,
         )
 
-        error_rate = logs.get(
+        log_error_rate = logs.get(
             "error_rate_percent",
             0,
         )
 
-        if server_errors > 0:
+        affected_endpoints = logs.get(
+            "affected_endpoints",
+            {},
+        )
+
+        if log_5xx > 0:
             raise_severity("CRITICAL")
 
             findings.append(
-                f"{server_errors} HTTP 5xx server error(s) "
+                f"{log_5xx} HTTP 5xx server error(s) "
                 "detected in application logs."
             )
 
@@ -121,11 +132,11 @@ def analyze_incident(
                 "Review recent deployments.",
             ])
 
-        elif client_errors > 0:
+        elif log_4xx > 0:
             raise_severity("WARNING")
 
             findings.append(
-                f"{client_errors} HTTP 4xx client error(s) "
+                f"{log_4xx} HTTP 4xx client error(s) "
                 "detected in application logs."
             )
 
@@ -136,8 +147,7 @@ def analyze_incident(
                 )
 
             recommendations.append(
-                "Inspect affected API endpoints and "
-                "request validation."
+                "Inspect the affected API endpoints."
             )
 
         if slow_requests > 0:
@@ -159,45 +169,49 @@ def analyze_incident(
                 "dependency latency."
             )
 
-        if error_rate >= 10:
+        if log_error_rate >= 10:
             raise_severity("WARNING")
 
             findings.append(
-                f"HTTP error rate is {error_rate}%."
+                f"Application log error rate is "
+                f"{log_error_rate}%."
             )
 
     # ---------------------------------------------------------
-    # 4. Prometheus metrics correlation
+    # 4. Prometheus metrics
     # ---------------------------------------------------------
 
+    metric_5xx = 0
+    metric_4xx = 0
+    metric_error_rate = 0
+
     if prometheus:
-        prometheus_server_errors = prometheus.get(
+        metric_5xx = prometheus.get(
             "server_errors",
             0,
         )
 
-        prometheus_client_errors = prometheus.get(
+        metric_4xx = prometheus.get(
             "client_errors",
             0,
         )
 
-        prometheus_error_rate = prometheus.get(
+        metric_error_rate = prometheus.get(
             "error_rate_percent",
             0,
         )
 
-        if prometheus_server_errors > 0:
+        if metric_5xx > 0:
             raise_severity("CRITICAL")
 
             findings.append(
-                f"Prometheus reports "
-                f"{prometheus_server_errors} HTTP 5xx "
-                "server error(s)."
+                f"Prometheus reports {metric_5xx} "
+                "HTTP 5xx server error(s)."
             )
 
             probable_root_cause = (
-                "Prometheus metrics and application "
-                "telemetry indicate server-side failures."
+                "Prometheus metrics indicate "
+                "server-side API failures."
             )
 
             recommendations.extend([
@@ -206,13 +220,12 @@ def analyze_incident(
                 "Review recent deployments.",
             ])
 
-        elif prometheus_client_errors > 0:
+        elif metric_4xx > 0:
             raise_severity("WARNING")
 
             findings.append(
-                f"Prometheus reports "
-                f"{prometheus_client_errors} HTTP 4xx "
-                "client error(s)."
+                f"Prometheus reports {metric_4xx} "
+                "HTTP 4xx client error(s)."
             )
 
             if severity != "CRITICAL":
@@ -222,44 +235,31 @@ def analyze_incident(
                 )
 
             recommendations.append(
-                "Inspect endpoints generating HTTP 4xx responses."
+                "Review request validation and client payloads."
             )
 
-        if prometheus_error_rate >= 10:
+        if metric_error_rate >= 10:
             raise_severity("WARNING")
 
             findings.append(
                 f"Prometheus HTTP error rate is "
-                f"{prometheus_error_rate}%."
+                f"{metric_error_rate}%."
             )
 
     # ---------------------------------------------------------
-    # 5. Correlation
+    # 5. Cross-source correlation
     # ---------------------------------------------------------
 
     if logs and prometheus:
-        log_5xx = logs.get(
-            "server_error_requests",
-            0,
-        )
 
-        metric_5xx = prometheus.get(
-            "server_errors",
-            0,
-        )
-
-        log_4xx = logs.get(
-            "client_error_requests",
-            0,
-        )
-
-        metric_4xx = prometheus.get(
-            "client_errors",
-            0,
-        )
-
+        # 5xx correlation
         if log_5xx > 0 and metric_5xx > 0:
             raise_severity("CRITICAL")
+
+            findings.append(
+                "Application logs and Prometheus metrics "
+                "both report HTTP 5xx errors."
+            )
 
             probable_root_cause = (
                 "Correlated application logs and "
@@ -267,23 +267,53 @@ def analyze_incident(
                 "HTTP failures."
             )
 
-            findings.append(
-                "Application logs and Prometheus metrics "
-                "both report HTTP 5xx errors."
-            )
+            recommendations.extend([
+                "Inspect the affected API endpoints.",
+                "Review application exception logs.",
+                "Check recent deployments and configuration changes.",
+            ])
 
+        # 4xx correlation
         elif log_4xx > 0 and metric_4xx > 0:
             raise_severity("WARNING")
-
-            probable_root_cause = (
-                "Correlated application logs and "
-                "Prometheus metrics confirm client-side "
-                "HTTP errors."
-            )
 
             findings.append(
                 "Application logs and Prometheus metrics "
                 "both report HTTP 4xx errors."
+            )
+
+            probable_root_cause = (
+                "Correlated application logs and "
+                "Prometheus metrics confirm client-side "
+                "API errors."
+            )
+
+            if affected_endpoints:
+                endpoint_list = ", ".join(
+                    affected_endpoints.keys()
+                )
+
+                findings.append(
+                    f"Affected endpoints: {endpoint_list}."
+                )
+
+            recommendations.extend([
+                "Inspect the affected API endpoints.",
+                "Review request validation and client payloads.",
+            ])
+
+        # Slow request correlation
+        if slow_requests > 0 and health.get("healthy"):
+            findings.append(
+                "Application logs detected slow requests "
+                "while the health endpoint remains available."
+            )
+
+            if severity == "LOW":
+                raise_severity("WARNING")
+
+            recommendations.append(
+                "Inspect application latency and backend dependencies."
             )
 
     # ---------------------------------------------------------
@@ -298,5 +328,6 @@ def analyze_incident(
         "severity": severity,
         "probable_root_cause": probable_root_cause,
         "findings": findings,
+        "affected_endpoints": affected_endpoints,
         "recommendations": recommendations,
     }
