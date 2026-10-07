@@ -3,6 +3,7 @@ def analyze_incident(
     metrics: dict,
     logs: dict | None = None,
     prometheus: dict | None = None,
+    prometheus_window: dict | None = None,
 ) -> dict:
     findings = []
     recommendations = []
@@ -184,8 +185,27 @@ def analyze_incident(
     metric_5xx = 0
     metric_4xx = 0
     metric_error_rate = 0
+    metric_source = "cumulative"
 
-    if prometheus:
+    if prometheus_window and prometheus_window.get("available"):
+        metric_5xx = prometheus_window.get(
+            "server_errors",
+            0,
+        )
+
+        metric_4xx = prometheus_window.get(
+            "client_errors",
+            0,
+        )
+
+        metric_error_rate = prometheus_window.get(
+            "error_rate_percent",
+            0,
+        )
+
+        metric_source = "time-window"
+
+    elif prometheus:
         metric_5xx = prometheus.get(
             "server_errors",
             0,
@@ -201,50 +221,50 @@ def analyze_incident(
             0,
         )
 
-        if metric_5xx > 0:
-            raise_severity("CRITICAL")
+    if metric_5xx > 0:
+        raise_severity("CRITICAL")
 
-            findings.append(
-                f"Prometheus reports {metric_5xx} "
-                "HTTP 5xx server error(s)."
-            )
+        findings.append(
+            f"Prometheus {metric_source} reports {metric_5xx} "
+            "HTTP 5xx server error(s)."
+        )
 
+        probable_root_cause = (
+            "Prometheus metrics indicate "
+            "server-side API failures."
+        )
+
+        recommendations.extend([
+            "Inspect application exception logs.",
+            "Check application dependencies.",
+            "Review recent deployments.",
+        ])
+
+    elif metric_4xx > 0:
+        raise_severity("WARNING")
+
+        findings.append(
+            f"Prometheus {metric_source} reports {metric_4xx} "
+            "HTTP 4xx client error(s)."
+        )
+
+        if severity != "CRITICAL":
             probable_root_cause = (
                 "Prometheus metrics indicate "
-                "server-side API failures."
+                "client-side API errors."
             )
 
-            recommendations.extend([
-                "Inspect application exception logs.",
-                "Check application dependencies.",
-                "Review recent deployments.",
-            ])
+        recommendations.append(
+            "Review request validation and client payloads."
+        )
 
-        elif metric_4xx > 0:
-            raise_severity("WARNING")
+    if metric_error_rate >= 10:
+        raise_severity("WARNING")
 
-            findings.append(
-                f"Prometheus reports {metric_4xx} "
-                "HTTP 4xx client error(s)."
-            )
-
-            if severity != "CRITICAL":
-                probable_root_cause = (
-                    "Prometheus metrics indicate "
-                    "client-side API errors."
-                )
-
-            recommendations.append(
-                "Review request validation and client payloads."
-            )
-
-        if metric_error_rate >= 10:
-            raise_severity("WARNING")
-
-            findings.append(
-                f"Prometheus HTTP error rate is "
-                f"{metric_error_rate}%."
-            )
+        findings.append(
+            f"Prometheus {metric_source} HTTP error rate is "
+            f"{metric_error_rate}%."
+        )
 
     # ---------------------------------------------------------
     # 5. Cross-source correlation

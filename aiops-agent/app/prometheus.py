@@ -23,7 +23,7 @@ def parse_labels(label_text=None):
     return labels
 
 
-def analyze_prometheus_metrics(metrics_text):
+def parse_prometheus_metrics(metrics_text):
     request_metrics = []
     business_metrics = {}
     invalid_lines = 0
@@ -63,6 +63,16 @@ def analyze_prometheus_metrics(metrics_text):
         }:
             business_metrics[name] = value
 
+    return {
+        "request_metrics": request_metrics,
+        "business_metrics": business_metrics,
+        "invalid_metric_lines": invalid_lines,
+    }
+
+
+def calculate_metric_totals(parsed_metrics):
+    request_metrics = parsed_metrics["request_metrics"]
+
     total_requests = sum(
         metric["value"]
         for metric in request_metrics
@@ -101,6 +111,49 @@ def analyze_prometheus_metrics(metrics_text):
         "client_errors": int(client_errors),
         "server_errors": int(server_errors),
         "error_rate_percent": round(error_rate, 2),
-        "business_metrics": business_metrics,
-        "invalid_metric_lines": invalid_lines,
+        "business_metrics": parsed_metrics["business_metrics"],
+        "invalid_metric_lines": parsed_metrics["invalid_metric_lines"],
     }
+
+
+def calculate_window_delta(previous, current):
+    total_requests = max(
+        0,
+        current["total_requests"] - previous["total_requests"],
+    )
+
+    error_requests = max(
+        0,
+        current["error_requests"] - previous["error_requests"],
+    )
+
+    client_errors = max(
+        0,
+        current["client_errors"] - previous["client_errors"],
+    )
+
+    server_errors = max(
+        0,
+        current["server_errors"] - previous["server_errors"],
+    )
+
+    error_rate = (
+        error_requests / total_requests * 100
+        if total_requests
+        else 0
+    )
+
+    return {
+        "total_requests": int(total_requests),
+        "error_requests": int(error_requests),
+        "client_errors": int(client_errors),
+        "server_errors": int(server_errors),
+        "error_rate_percent": round(error_rate, 2),
+        "windowed": True,
+    }
+
+
+def analyze_prometheus_metrics(metrics_text):
+    parsed_metrics = parse_prometheus_metrics(metrics_text)
+
+    return calculate_metric_totals(parsed_metrics)
