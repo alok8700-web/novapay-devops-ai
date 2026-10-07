@@ -11,12 +11,10 @@ from app.rca import analyze_incident
 
 app = FastAPI(
     title="NovaPay AIOps Agent",
-    version="0.2.0",
+    version="0.3.0",
 )
 
-
 NOVAPAY_URL = os.getenv("NOVAPAY_URL", "http://novapay:4000")
-
 NOVAPAY_HEALTH_URL = f"{NOVAPAY_URL}/api/health"
 NOVAPAY_METRICS_URL = f"{NOVAPAY_URL}/metrics"
 
@@ -30,7 +28,7 @@ async def health():
     return {
         "status": "ok",
         "service": "novapay-aiops-agent",
-        "version": "0.2.0",
+        "version": "0.3.0",
     }
 
 
