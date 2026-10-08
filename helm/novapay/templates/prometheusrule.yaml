@@ -18,4 +18,24 @@ spec:
           annotations:
             summary: "NovaPay API is down"
             description: "No NovaPay API instances are being monitored by Prometheus."
+
+        - alert: AIOpsCriticalIncident
+          expr: increase(aiops_incident_total{severity="CRITICAL"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+            service: novapay-aiops
+          annotations:
+            summary: "AIOps detected a critical incident"
+            description: "The NovaPay AIOps agent detected at least one critical incident in the last 5 minutes."
+
+        - alert: AIOpsWarningIncident
+          expr: increase(aiops_incident_total{severity="WARNING"}[5m]) > 0
+          for: 2m
+          labels:
+            severity: warning
+            service: novapay-aiops
+          annotations:
+            summary: "AIOps detected a warning incident"
+            description: "The NovaPay AIOps agent detected at least one warning incident in the last 5 minutes."
 {{- end }}
