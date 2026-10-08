@@ -1,8 +1,14 @@
 import os
 
 from fastapi import FastAPI
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel
 
+from app.agent_metrics import (
+    analysis_total,
+    incident_total,
+)
 from app.health import check_service
 from app.logs import analyze_logs
 from app.metrics import fetch_metrics
@@ -44,6 +50,14 @@ async def health():
     }
 
 
+@app.get("/metrics")
+async def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
+
 @app.get("/analyze")
 async def analyze():
     health_result = await check_service(
@@ -82,6 +96,12 @@ async def analyze():
         prometheus=prometheus_analysis,
         prometheus_window=window_analysis,
     )
+
+    analysis_total.inc()
+
+    severity = analysis.get("severity", "LOW")
+    if severity in {"WARNING", "CRITICAL"}:
+        incident_total.labels(severity=severity).inc()
 
     return {
         "service": "novapay",
@@ -135,6 +155,12 @@ async def analyze_application_logs(
         prometheus_analysis,
         prometheus_window=window_analysis,
     )
+
+    analysis_total.inc()
+
+    severity = analysis.get("severity", "LOW")
+    if severity in {"WARNING", "CRITICAL"}:
+        incident_total.labels(severity=severity).inc()
 
     return {
         "service": "novapay",
