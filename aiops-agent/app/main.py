@@ -106,20 +106,40 @@ async def analyze_application_logs(
         NOVAPAY_METRICS_URL
     )
 
+    global previous_prometheus_snapshot
+
     prometheus_analysis = analyze_prometheus_metrics(
         metrics_result.get("metrics", "")
     )
+
+    if previous_prometheus_snapshot is None:
+        window_analysis = {
+            "available": False,
+            "reason": "Waiting for a previous Prometheus snapshot.",
+        }
+    else:
+        window_analysis = {
+            "available": True,
+            **calculate_window_delta(
+                previous_prometheus_snapshot,
+                prometheus_analysis,
+            ),
+        }
+
+    previous_prometheus_snapshot = prometheus_analysis
 
     analysis = analyze_incident(
         health_result,
         metrics_result,
         log_analysis,
         prometheus_analysis,
+        prometheus_window=window_analysis,
     )
 
     return {
         "service": "novapay",
         "logs": log_analysis,
         "prometheus": prometheus_analysis,
+        "prometheus_window": window_analysis,
         "analysis": analysis,
     }
