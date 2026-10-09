@@ -337,6 +337,70 @@ def analyze_incident(
             )
 
     # ---------------------------------------------------------
+    # ---------------------------------------------------------
+    # 5.5 Application-level errors and database failures
+    # ---------------------------------------------------------
+
+    app_error_count = logs.get("application_error_count", 0) if logs else 0
+    app_critical_count = logs.get("application_critical_count", 0) if logs else 0
+    database_error_count = logs.get("database_error_count", 0) if logs else 0
+    app_errors = logs.get("application_errors", []) if logs else []
+
+    if app_error_count > 0:
+        findings.append(
+            f"{app_error_count} application-level ERROR/CRITICAL/FATAL "
+            "message(s) detected."
+        )
+
+    if app_critical_count > 0:
+        raise_severity("CRITICAL")
+        findings.append(
+            "Application-level CRITICAL/FATAL log messages detected."
+        )
+        recommendations.extend([
+            "Check payment-service health and recent application exceptions.",
+            "Review recent deployments and configuration changes.",
+        ])
+
+        if not database_error_count:
+            probable_root_cause = (
+                "Application logs contain CRITICAL/FATAL errors; "
+                "investigate the affected service and its dependencies."
+            )
+
+    elif app_error_count > 0 and severity == "LOW":
+        raise_severity("WARNING")
+        probable_root_cause = (
+            "Application logs contain ERROR messages requiring investigation."
+        )
+
+    if database_error_count > 0:
+        raise_severity("CRITICAL")
+        findings.append(
+            f"{database_error_count} database connection/pool-related "
+            "application error(s) detected."
+        )
+        probable_root_cause = (
+            "NovaPay payment processing may be affected by database "
+            "connection timeouts or connection-pool exhaustion."
+        )
+        recommendations.extend([
+            "Check database availability, connectivity, and connection limits.",
+            "Inspect connection-pool active, idle, and pending connection counts.",
+            "Review database response times, locks, and recent database errors.",
+            "Verify connection-pool timeout settings and ensure connections are released.",
+        ])
+
+        for item in app_errors:
+            message = item.get("message", "")
+            if message and any(
+                term in message.lower()
+                for term in ("timeout", "exhausted", "refused", "too many connections")
+            ):
+                findings.append(
+                    f"Database-related error detail: {message[:250]}"
+                )
+
     # 6. Final recommendations
     # ---------------------------------------------------------
 
