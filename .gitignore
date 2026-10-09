@@ -26,3 +26,10 @@ Thumbs.db
 minikube-linux-amd64
 helm-linux-amd64.tar.gz
 linux-amd64/
+
+# Python test and runtime artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
