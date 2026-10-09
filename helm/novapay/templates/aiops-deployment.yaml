@@ -1,0 +1,63 @@
+{{- if .Values.aiops.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ .Chart.Name }}-aiops
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}-aiops
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}-aiops
+
+    spec:
+      securityContext:
+        runAsNonRoot: true
+
+      containers:
+        - name: aiops-agent
+
+          image: "{{ .Values.aiops.image.repository }}:{{ .Values.aiops.image.tag }}"
+
+          imagePullPolicy: {{ .Values.aiops.image.pullPolicy }}
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.aiops.container.port }}
+              protocol: TCP
+
+          env:
+            - name: NOVAPAY_URL
+              value: "http://{{ .Chart.Name }}-service:{{ .Values.service.port }}"
+
+          resources:
+            {{- toYaml .Values.aiops.resources | nindent 12 }}
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.aiops.container.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.aiops.container.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+{{- end }}

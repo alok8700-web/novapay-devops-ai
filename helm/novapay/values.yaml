@@ -57,3 +57,22 @@ monitoring:
     enabled: true
     labels:
       release: monitoring
+
+aiops:
+  enabled: true
+
+  image:
+    repository: alokdocker8700/novapay-aiops-agent
+    tag: 6c2841f
+    pullPolicy: Always
+
+  container:
+    port: 8000
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi

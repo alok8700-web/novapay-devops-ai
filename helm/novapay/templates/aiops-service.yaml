@@ -1,0 +1,24 @@
+{{- if .Values.aiops.enabled }}
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: {{ .Chart.Name }}-aiops-service
+
+  labels:
+    app: {{ .Chart.Name }}-aiops
+    app.kubernetes.io/name: {{ .Chart.Name }}-aiops
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+spec:
+  type: ClusterIP
+
+  selector:
+    app: {{ .Chart.Name }}-aiops
+
+  ports:
+    - name: http
+      port: {{ .Values.aiops.container.port }}
+      targetPort: {{ .Values.aiops.container.port }}
+      protocol: TCP
+{{- end }}
