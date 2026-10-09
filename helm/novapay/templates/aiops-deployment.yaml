@@ -20,6 +20,15 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
 
       containers:
         - name: aiops-agent
@@ -29,11 +38,16 @@ spec:
           imagePullPolicy: {{ .Values.aiops.image.pullPolicy }}
 
           securityContext:
+            runAsUser: 10001
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
 
           ports:
             - name: http
